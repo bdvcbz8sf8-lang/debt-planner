@@ -1,0 +1,146 @@
+#root {
+  margin: 0 auto;
+  max-width: 1100px;
+  padding: 2rem 1rem 3rem;
+}
+
+.page {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero h1 {
+  font-size: 2rem;
+  margin: 0.2rem 0;
+}
+
+.hero-copy {
+  max-width: 650px;
+  margin: 0;
+}
+
+.kicker {
+  color: #7f4c00;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(1px);
+  border-radius: 14px;
+  padding: 1rem;
+  border: 1px solid #dfd9cc;
+  box-shadow: 0 8px 24px rgba(41, 58, 68, 0.08);
+}
+
+.panel h2 {
+  margin-top: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.form-grid label {
+  display: grid;
+  font-weight: 600;
+  gap: 0.25rem;
+}
+
+.form-grid input {
+  border: 1px solid #c6ced4;
+  border-radius: 8px;
+  padding: 0.55rem;
+  font-size: 1rem;
+}
+
+.form-grid button,
+.toggle-all {
+  border: 0;
+  background: #2f6b48;
+  color: #fff;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.8rem;
+}
+
+.summary-card {
+  background: #fff;
+  border: 1px solid #d6dee5;
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.summary-card h3 {
+  margin-top: 0;
+  font-size: 0.95rem;
+}
+
+.summary-card p {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.summary-card.highlight {
+  background: #f8f5db;
+  border-color: #d6cc85;
+}
+
+.table-wrap {
+  overflow: auto;
+  border: 1px solid #d3dbe2;
+  border-radius: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+
+th,
+td {
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid #e4eaee;
+  text-align: right;
+}
+
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+
+.errors {
+  margin-top: 0.7rem;
+  background: #ffe5e4;
+  border: 1px solid #ebafab;
+  border-radius: 10px;
+  padding: 0.7rem;
+}
+
+.warnings {
+  margin-bottom: 0.6rem;
+  background: #fff1cf;
+  border: 1px solid #ddc27f;
+  border-radius: 10px;
+  padding: 0.6rem;
+}
+
+.toggle-all {
+  margin-top: 0.7rem;
+}

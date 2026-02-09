@@ -1,0 +1,8 @@
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #fff4df 0, #f2f7f1 52%, #e8eef5);
+  color: #21303c;
+  font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  min-width: 320px;
+  min-height: 100vh;
+}
