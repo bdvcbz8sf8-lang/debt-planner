@@ -43,7 +43,7 @@
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 0.8rem;
   align-items: end;
 }
@@ -70,6 +70,30 @@
   border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.mode-badge {
+  margin-top: 0;
+  background: #e7f0ff;
+  border: 1px solid #bfd0f7;
+  border-radius: 999px;
+  display: inline-block;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.mode-toggle {
+  border: 1px solid #c6ced4;
+  border-radius: 8px;
+  padding: 0.6rem;
+  margin: 0;
+}
+
+.mode-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
 }
 
 .summary-grid {
@@ -143,4 +167,67 @@ td:first-child {
 
 .toggle-all {
   margin-top: 0.7rem;
+}
+
+.charts-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.chart-card {
+  border: 1px solid #d3dbe2;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.6rem;
+}
+
+.chart-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+}
+
+.axis-line {
+  stroke: #94a6b5;
+  stroke-width: 1;
+}
+
+.line-balance {
+  stroke: #1f66d1;
+  stroke-width: 3;
+}
+
+.bar-interest {
+  fill: #f0ab5f;
+}
+
+.bar-principal {
+  fill: #63b576;
+}
+
+.actions-row {
+  margin-top: 0.7rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.secondary-button {
+  border: 1px solid #8599a9;
+  background: #fff;
+  color: #21303c;
+  border-radius: 10px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.copy-status {
+  font-size: 0.9rem;
+  color: #2f6b48;
+  font-weight: 700;
 }
