@@ -11,6 +11,8 @@
 .page {
   min-height: 100vh;
   font-size: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .topbar {
@@ -584,12 +586,19 @@ select {
 }
 
 .app-footer {
-  margin: 16px var(--space-x);
-  padding-top: 10px;
+  margin: 0 var(--space-x) 8px;
+  margin-top: auto;
+  padding-top: 6px;
   border-top: 1px solid #e2e8f0;
   display: block;
   color: #94a3b8;
   font-size: 14px;
+  line-height: 1.2;
+}
+
+.app-footer p {
+  margin: 0;
+  line-height: 1.2;
 }
 
 .date-field {
