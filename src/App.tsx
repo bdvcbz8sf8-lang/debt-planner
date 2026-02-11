@@ -295,11 +295,11 @@ function App() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   const [singleInput, setSingleInput] = useState({
-    principal: '500000',
-    apr: '12.5',
-    termMonths: '60',
-    payment: '15000',
-    extraPayment: '0',
+    principal: '',
+    apr: '',
+    termMonths: '',
+    payment: '',
+    extraPayment: '',
     startDate: '',
     prepaymentMode: 'reduce_term' as PrepaymentMode,
   })
