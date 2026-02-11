@@ -88,6 +88,18 @@ describe('portfolioPlanner', () => {
     expect(result.perLoan.b.schedule[0].extraPaid).toBeGreaterThan(0)
   })
 
+  it('portfolio schedule totals include mandatory payments of all debts', () => {
+    const loans = [
+      loan({ id: 'a', includeInPlan: false, principal: 10000, apr: 0, payment: 700 }),
+      loan({ id: 'b', includeInPlan: true, principal: 10000, apr: 0, payment: 500 }),
+    ]
+    const result = simulatePortfolioPlan(
+      loans,
+      { ...baseSettings('avalanche'), extraBudget: 0 },
+    )
+    expect(result.portfolioSchedule[0].totalPayment).toBe(1200)
+  })
+
   it('reduce_payment recalculates payment and stays valid', () => {
     const loans = [
       loan({

@@ -222,7 +222,10 @@ export function simulatePortfolioPlan(
       const plannedPrincipal = Math.max(state.currentPayment - interest, 0)
       const principalPaid = Math.min(plannedPrincipal, state.balance)
       const balanceAfterMain = state.balance - principalPaid
-      const perLoanExtra = Math.min(roundRub(state.loan.extraPayment ?? 0), balanceAfterMain)
+      const safeExtra = Number.isFinite(state.loan.extraPayment ?? 0)
+        ? roundRub(state.loan.extraPayment ?? 0)
+        : 0
+      const perLoanExtra = Math.min(safeExtra, balanceAfterMain)
       const balanceAfter = balanceAfterMain - perLoanExtra
       const mandatoryPaid = interest + principalPaid
       const monthsLeftAfter = state.loan.termMonths - month

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   calculateDebtPlan,
@@ -16,6 +16,22 @@ import {
 
 const STORAGE_KEY = 'debt-planner-v03'
 
+type PersistedState = {
+  loans?: Loan[]
+  settings?: PlanSettings
+  selectedStrategy?: 'avalanche' | 'snowball'
+  activeView?: 'single' | 'portfolio'
+  singleInput?: {
+    principal: string
+    apr: string
+    termMonths: string
+    payment: string
+    extraPayment: string
+    startDate: string
+    prepaymentMode: PrepaymentMode
+  }
+}
+
 const currency = new Intl.NumberFormat('ru-RU', {
   style: 'currency',
   currency: 'RUB',
@@ -31,14 +47,19 @@ function createId(): string {
 }
 
 function parseNonNegativeInput(value: string): number {
-  if (value === '') {
+  if (value.trim() === '') {
     return Number.NaN
   }
-  const parsed = Number(value)
+  const parsed = Number(value.replace(',', '.').trim())
   if (!Number.isFinite(parsed)) {
     return Number.NaN
   }
   return Math.max(0, parsed)
+}
+
+function hasNonNegativeNumber(value: string): boolean {
+  const parsed = parseNonNegativeInput(value)
+  return Number.isFinite(parsed) && parsed >= 0
 }
 
 function numericInputValue(value: number): number | string {
@@ -50,12 +71,13 @@ function createDefaultLoan(index: number): Loan {
     id: createId(),
     name: `Долг ${index}`,
     type: 'loan',
-    principal: 500000,
-    apr: 12,
-    termMonths: 60,
-    payment: 15000,
-    extraPayment: 3000,
+    principal: Number.NaN,
+    apr: Number.NaN,
+    termMonths: Number.NaN,
+    payment: Number.NaN,
+    extraPayment: 0,
     includeInPlan: true,
+    startDate: '',
     prepaymentMode: 'reduce_term',
   }
 }
@@ -71,7 +93,199 @@ function defaultSettings(): PlanSettings {
   }
 }
 
+type DateFieldProps = {
+  value: string
+  required?: boolean
+  onChange: (value: string) => void
+}
+
+function DateField({ value, required, onChange }: DateFieldProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const [draftValue, setDraftValue] = useState('')
+  const [visibleMonth, setVisibleMonth] = useState<Date>(() => {
+    const source = value ? new Date(`${value}T12:00:00`) : new Date()
+    return new Date(source.getFullYear(), source.getMonth(), 1)
+  })
+
+  useEffect(() => {
+    if (!value) {
+      setDraftValue('')
+      return
+    }
+    const parsed = new Date(`${value}T12:00:00`)
+    if (Number.isNaN(parsed.getTime())) {
+      return
+    }
+    setVisibleMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
+    setDraftValue(formatDisplayDate(value))
+  }, [value])
+
+  useEffect(() => {
+    function onClickOutside(event: MouseEvent) {
+      if (!rootRef.current) {
+        return
+      }
+      const target = event.target
+      if (target instanceof Node && !rootRef.current.contains(target)) {
+        setOpen(false)
+      }
+    }
+
+    if (open) {
+      document.addEventListener('mousedown', onClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [open])
+
+  function formatDisplayDate(dateIso: string): string {
+    if (!dateIso) {
+      return ''
+    }
+    const parsed = new Date(`${dateIso}T12:00:00`)
+    if (Number.isNaN(parsed.getTime())) {
+      return ''
+    }
+    const day = String(parsed.getDate()).padStart(2, '0')
+    const month = String(parsed.getMonth() + 1).padStart(2, '0')
+    const year = parsed.getFullYear()
+    return `${day}.${month}.${year}`
+  }
+
+  function toIsoDate(date: Date): string {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  function parseInputToIso(input: string): string | null {
+    const trimmed = input.trim()
+    if (trimmed === '') {
+      return ''
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return trimmed
+    }
+    const dotted = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/)
+    if (!dotted) {
+      return null
+    }
+    const day = dotted[1]
+    const month = dotted[2]
+    const year = dotted[3]
+    return `${year}-${month}-${day}`
+  }
+
+  function sameDay(left: Date, right: Date): boolean {
+    return (
+      left.getFullYear() === right.getFullYear() &&
+      left.getMonth() === right.getMonth() &&
+      left.getDate() === right.getDate()
+    )
+  }
+
+  const monthLabel = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(visibleMonth)
+  const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+
+  const firstDay = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1)
+  const startShift = (firstDay.getDay() + 6) % 7
+  const gridStart = new Date(firstDay)
+  gridStart.setDate(firstDay.getDate() - startShift)
+
+  const selectedDate = value ? new Date(`${value}T12:00:00`) : null
+  const today = new Date()
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart)
+    date.setDate(gridStart.getDate() + index)
+    const currentMonth = date.getMonth() === visibleMonth.getMonth()
+    const selected = selectedDate ? sameDay(date, selectedDate) : false
+    const isToday = sameDay(date, today)
+    return { date, currentMonth, selected, isToday }
+  })
+
+  return (
+    <div className="date-field" ref={rootRef}>
+      <input
+        type="text"
+        required={required}
+        value={draftValue}
+        placeholder="дд.мм.гггг"
+        onClick={() => setOpen(true)}
+        onChange={(e) => {
+          const next = e.target.value
+          setDraftValue(next)
+          const parsed = parseInputToIso(next)
+          if (parsed !== null) {
+            onChange(parsed)
+          }
+        }}
+      />
+      <button className="calendar-btn" type="button" onClick={() => setOpen((v) => !v)} aria-label="Открыть календарь">
+        📅
+      </button>
+      {open && (
+        <div className="calendar-popover">
+          <div className="calendar-header">
+            <button
+              type="button"
+              className="calendar-nav"
+              onClick={() =>
+                setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+              }
+              aria-label="Предыдущий месяц"
+            >
+              ‹
+            </button>
+            <p>{monthLabel}</p>
+            <button
+              type="button"
+              className="calendar-nav"
+              onClick={() =>
+                setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+              }
+              aria-label="Следующий месяц"
+            >
+              ›
+            </button>
+          </div>
+          <div className="calendar-grid weekdays">
+            {weekdays.map((day) => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
+          <div className="calendar-grid days">
+            {days.map((day) => (
+              <button
+                key={toIsoDate(day.date)}
+                type="button"
+                className={[
+                  'calendar-day',
+                  !day.currentMonth ? 'muted' : '',
+                  day.selected ? 'selected' : '',
+                  day.isToday ? 'today' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => {
+                  const iso = toIsoDate(day.date)
+                  onChange(iso)
+                  setDraftValue(formatDisplayDate(iso))
+                  setOpen(false)
+                }}
+              >
+                {day.date.getDate()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function App() {
+  const [storageHydrated, setStorageHydrated] = useState(false)
   const [activeView, setActiveView] = useState<'single' | 'portfolio'>('portfolio')
   const [loans, setLoans] = useState<Loan[]>([])
   const [settings, setSettings] = useState<PlanSettings>(defaultSettings())
@@ -79,14 +293,13 @@ function App() {
   const [selectedStrategy, setSelectedStrategy] = useState<'avalanche' | 'snowball'>('avalanche')
   const [portfolioResult, setPortfolioResult] = useState<PortfolioPlanResult | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [detailMode, setDetailMode] = useState<Record<string, 'portfolio' | 'single'>>({})
 
   const [singleInput, setSingleInput] = useState({
     principal: '500000',
     apr: '12.5',
     termMonths: '60',
     payment: '15000',
-    extraPayment: '5000',
+    extraPayment: '0',
     startDate: '',
     prepaymentMode: 'reduce_term' as PrepaymentMode,
   })
@@ -95,33 +308,59 @@ function App() {
   const singleCanCalculate =
     singleInput.principal.trim() !== '' &&
     singleInput.apr.trim() !== '' &&
+    singleInput.termMonths.trim() !== '' &&
     singleInput.payment.trim() !== '' &&
-    Number(singleInput.principal) >= 0 &&
-    Number(singleInput.apr) >= 0 &&
-    Number(singleInput.payment) >= 0
+    singleInput.startDate.trim() !== '' &&
+    hasNonNegativeNumber(singleInput.principal) &&
+    hasNonNegativeNumber(singleInput.apr) &&
+    hasNonNegativeNumber(singleInput.termMonths) &&
+    hasNonNegativeNumber(singleInput.payment)
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      return
-    }
     try {
-      const parsed = JSON.parse(raw) as { loans?: Loan[]; settings?: PlanSettings }
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) {
+        setStorageHydrated(true)
+        return
+      }
+      const parsed = JSON.parse(raw) as PersistedState
       if (Array.isArray(parsed.loans)) {
         setLoans(parsed.loans)
       }
       if (parsed.settings) {
         setSettings(parsed.settings)
+      }
+      if (parsed.selectedStrategy) {
+        setSelectedStrategy(parsed.selectedStrategy)
+      } else if (parsed.settings?.strategy) {
         setSelectedStrategy(parsed.settings.strategy)
+      }
+      if (parsed.activeView) {
+        setActiveView(parsed.activeView)
+      }
+      if (parsed.singleInput) {
+        setSingleInput(parsed.singleInput)
       }
     } catch {
       // ignore broken local storage data
+    } finally {
+      setStorageHydrated(true)
     }
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ loans, settings }))
-  }, [loans, settings])
+    if (!storageHydrated) {
+      return
+    }
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ loans, settings, selectedStrategy, activeView, singleInput } satisfies PersistedState),
+      )
+    } catch {
+      // localStorage may be unavailable due to browser privacy policies
+    }
+  }, [loans, settings, selectedStrategy, activeView, singleInput, storageHydrated])
 
   function updateLoan(id: string, patch: Partial<Loan>) {
     setLoans((prev) => prev.map((loan) => (loan.id === id ? { ...loan, ...patch } : loan)))
@@ -154,9 +393,12 @@ function App() {
     const planSettings = {
       ...settings,
       strategy: selectedStrategy,
-      planStartDate: settings.planStartDate || undefined,
     }
-    const validationErrors = validatePlanInputs(loans, planSettings)
+    const dateErrors = loans
+      .filter((loan) => loan.includeInPlan)
+      .filter((loan) => !loan.startDate)
+      .map((loan) => `"${loan.name}": укажите дату платежа.`)
+    const validationErrors = [...validatePlanInputs(loans, planSettings), ...dateErrors]
     setErrors(validationErrors)
     if (validationErrors.length > 0) {
       setPortfolioResult(null)
@@ -186,6 +428,23 @@ function App() {
   }
 
   const includedLoans = useMemo(() => loans.filter((loan) => loan.includeInPlan), [loans])
+  const planCanCalculate =
+    includedLoans.length > 0 &&
+    includedLoans.every(
+      (loan) =>
+        loan.name.trim() !== '' &&
+        Number.isFinite(loan.principal) &&
+        loan.principal >= 0 &&
+        Number.isFinite(loan.apr) &&
+        loan.apr >= 0 &&
+        Number.isFinite(loan.payment) &&
+        loan.payment >= 0 &&
+        Number.isFinite(loan.termMonths) &&
+        loan.termMonths > 0 &&
+        Boolean(loan.startDate),
+    ) &&
+    Number.isFinite(settings.extraBudget) &&
+    settings.extraBudget >= 0
 
   const currentFocusLoanName = useMemo(() => {
     const firstFocus = portfolioResult?.focusByMonth[0]?.loanId
@@ -230,7 +489,7 @@ function App() {
               }}
             >
               <label>
-                Остаток долга (₽) <span className="required">*</span>
+                <span className="label-title">Остаток долга (₽) <span className="required">*</span></span>
                 <input
                   type="number"
                   min="0"
@@ -239,16 +498,17 @@ function App() {
                 />
               </label>
               <label>
-                Процентная ставка (% годовых) <span className="required">*</span>
+                <span className="label-title">Процентная ставка (% годовых) <span className="required">*</span></span>
                 <input
                   type="number"
                   min="0"
+                  step="0.1"
                   value={singleInput.apr}
                   onChange={(e) => setSingleInput((p) => ({ ...p, apr: e.target.value }))}
                 />
               </label>
               <label>
-                Ежемесячный платёж (₽) <span className="required">*</span>
+                <span className="label-title">Ежемесячный платёж (₽) <span className="required">*</span></span>
                 <input
                   type="number"
                   min="0"
@@ -266,15 +526,15 @@ function App() {
                 />
               </label>
               <label>
-                Дата начала (опционально)
-                <input
-                  type="date"
+                <span className="label-title">Дата платежа <span className="required">*</span></span>
+                <DateField
+                  required
                   value={singleInput.startDate}
-                  onChange={(e) => setSingleInput((p) => ({ ...p, startDate: e.target.value }))}
+                  onChange={(value) => setSingleInput((p) => ({ ...p, startDate: value }))}
                 />
               </label>
               <label>
-                Режим досрочного погашения
+                <span className="label-title">Режим досрочного погашения <span className="required">*</span></span>
                 <select
                   value={singleInput.prepaymentMode}
                   onChange={(e) =>
@@ -286,7 +546,7 @@ function App() {
                 </select>
               </label>
               <label>
-                Срок (месяцев)
+                <span className="label-title">Срок (месяцев) <span className="required">*</span></span>
                 <input
                   type="number"
                   min="0"
@@ -416,9 +676,8 @@ function App() {
                 }
 
                 const portfolioLoan = portfolioResult?.perLoan[loan.id]
-                const showPortfolio = detailMode[loan.id] !== 'single'
                 const detailRows: ScheduleRow[] =
-                  showPortfolio && portfolioLoan
+                  portfolioLoan
                     ? portfolioLoan.schedule
                     : singleCalc?.withExtra.schedule ?? []
 
@@ -433,7 +692,7 @@ function App() {
                             value={loan.name}
                             onChange={(e) => updateLoan(loan.id, { name: e.target.value })}
                           />
-                          <span className="apr-badge">{loan.apr}%</span>
+                          <span className="apr-badge">{Number.isNaN(loan.apr) ? '—' : `${loan.apr}%`}</span>
                         </div>
                         <div className="loan-mini-metrics">
                           <span>Остаток: <b>{formatRub(loan.principal)}</b></span>
@@ -484,7 +743,7 @@ function App() {
                             </select>
                           </label>
                           <label>
-                            Остаток
+                            <span className="label-title">Остаток <span className="required">*</span></span>
                             <input
                               type="number"
                               min="0"
@@ -493,16 +752,17 @@ function App() {
                             />
                           </label>
                           <label>
-                            APR
+                            <span className="label-title">% <span className="required">*</span></span>
                             <input
                               type="number"
                               min="0"
+                              step="0.1"
                               value={numericInputValue(loan.apr)}
                               onChange={(e) => updateLoan(loan.id, { apr: parseNonNegativeInput(e.target.value) })}
                             />
                           </label>
                           <label>
-                            Платёж
+                            <span className="label-title">Платёж <span className="required">*</span></span>
                             <input
                               type="number"
                               min="0"
@@ -511,7 +771,7 @@ function App() {
                             />
                           </label>
                           <label>
-                            Срок (месяцы)
+                            <span className="label-title">Срок (месяцы) <span className="required">*</span></span>
                             <input
                               type="number"
                               min="0"
@@ -529,15 +789,15 @@ function App() {
                             />
                           </label>
                           <label>
-                            Дата начала
-                            <input
-                              type="date"
+                            <span className="label-title">Дата платежа <span className="required">*</span></span>
+                            <DateField
+                              required
                               value={loan.startDate ?? ''}
-                              onChange={(e) => updateLoan(loan.id, { startDate: e.target.value || undefined })}
+                              onChange={(value) => updateLoan(loan.id, { startDate: value || undefined })}
                             />
                           </label>
                           <label>
-                            Режим
+                            <span className="label-title">Режим <span className="required">*</span></span>
                             <select
                               value={loan.prepaymentMode}
                               onChange={(e) => updateLoan(loan.id, { prepaymentMode: e.target.value as PrepaymentMode })}
@@ -547,38 +807,6 @@ function App() {
                             </select>
                           </label>
                         </div>
-
-                        <div className="detail-switch">
-                          <label>
-                            <input
-                              type="radio"
-                              checked={detailMode[loan.id] !== 'single'}
-                              onChange={() => setDetailMode((prev) => ({ ...prev, [loan.id]: 'portfolio' }))}
-                            />
-                            Расчёт по портфелю
-                          </label>
-                          <label>
-                            <input
-                              type="radio"
-                              checked={detailMode[loan.id] === 'single'}
-                              onChange={() => setDetailMode((prev) => ({ ...prev, [loan.id]: 'single' }))}
-                            />
-                            Расчёт одного долга
-                          </label>
-                        </div>
-
-                        {singleCalc && (
-                          <p className="mini-summary">
-                            Отдельно долг закроется за {singleCalc.withExtra.monthsToClose} мес.,
-                            проценты {formatRub(singleCalc.withExtra.totalInterest)}.
-                          </p>
-                        )}
-                        {portfolioLoan && (
-                          <p className="mini-summary">
-                            В портфеле долг закроется за {portfolioLoan.monthsToClose} мес.,
-                            проценты {formatRub(portfolioLoan.totalInterest)}.
-                          </p>
-                        )}
 
                         <div className="schedule-table-wrap">
                           <table data-testid={`detail-table-${loan.id}`} className="schedule-table">
@@ -631,7 +859,7 @@ function App() {
               <article className="method-card">
                 <div className="method-icon method-green">🗓</div>
                 <h3>Индивидуальный план</h3>
-                <p>Настройте бюджет досрочки и дату старта для персонального плана.</p>
+                <p>Настройте бюджет досрочки для персонального плана.</p>
               </article>
             </section>
           )}
@@ -641,18 +869,18 @@ function App() {
               <h2>Стратегия погашения</h2>
               <div className="plan-grid">
                 <label>
-                  Стратегия
+                  <span className="label-title">Стратегия <span className="required">*</span></span>
                   <select
                     data-testid="strategy-select"
                     value={selectedStrategy}
                     onChange={(e) => setSelectedStrategy(e.target.value as 'avalanche' | 'snowball')}
                   >
-                    <option value="avalanche">Avalanche (высокие % первыми)</option>
-                    <option value="snowball">Snowball (малые балансы первыми)</option>
+                    <option value="avalanche">Лавина (по макс. %)</option>
+                    <option value="snowball">Снежный ком (по мин. сумме долга)</option>
                   </select>
                 </label>
                 <label>
-                  Дополнительный бюджет в месяц (₽)
+                  <span className="label-title">Дополнительный бюджет в месяц (₽) <span className="required">*</span></span>
                   <input
                     data-testid="extra-budget"
                     type="number"
@@ -663,17 +891,6 @@ function App() {
                         ...prev,
                         extraBudget: parseNonNegativeInput(e.target.value),
                       }))
-                    }
-                  />
-                </label>
-                <label>
-                  Дата начала плана
-                  <input
-                    data-testid="plan-start-date"
-                    type="date"
-                    value={settings.planStartDate ?? ''}
-                    onChange={(e) =>
-                      setSettings((prev) => ({ ...prev, planStartDate: e.target.value || '' }))
                     }
                   />
                 </label>
@@ -692,7 +909,13 @@ function App() {
                 Включено в стратегию: {includedLoans.length} из {loans.length}
               </p>
 
-              <button data-testid="calculate-plan" type="button" onClick={calculatePlan}>
+              <button
+                data-testid="calculate-plan"
+                type="button"
+                onClick={calculatePlan}
+                disabled={!planCanCalculate}
+                className={!planCanCalculate ? 'button-disabled' : ''}
+              >
                 Рассчитать план
               </button>
 
@@ -799,12 +1022,7 @@ function App() {
       )}
 
       <footer className="app-footer">
-        <p>© 2024 Debt Planner. Все права защищены.</p>
-        <div className="footer-links">
-          <a href="#">О сервисе</a>
-          <a href="#">Помощь</a>
-          <a href="#">Конфиденциальность</a>
-        </div>
+        <p>Все расчёты выполняются в браузере. Данные не отправляются на сервер.</p>
       </footer>
     </main>
   )
